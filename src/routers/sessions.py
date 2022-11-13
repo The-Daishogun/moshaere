@@ -73,9 +73,14 @@ def submit_verse(
 ):
     session = SessionBase.get_session_by_session_id(data.session_id, r)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail={"error": "Session not found"})
     if data.email not in session.users:
-        raise HTTPException(status_code=403, detail="User not in session")
+        raise HTTPException(status_code=403, detail={"error": "User not in session"})
+    current_turn = session.get_current_turn()
+    if current_turn != data.email:
+        raise HTTPException(
+            status_code=400, detail={"error": "not your turn", "turn": current_turn}
+        )
 
     validation_class = Validations.get_validation_class(session.validation_slug)
     valid, reason, verse = validation_class.validate(data.verse, session, db)
@@ -86,6 +91,7 @@ def submit_verse(
         return SessionWithPoemOut(verse=None, session=session, error=reason)
 
     session.used_poems.append(verse.text if isinstance(verse, Verse) else verse)  # type: ignore
+    session.turn += 1
     session.change_score(data.email, 1)
     session.set(r)
     return SessionWithPoemOut(verse=verse, session=session)

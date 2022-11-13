@@ -12,13 +12,14 @@ class SessionBase(BaseModel):
     users: list[str]
     used_poems: list[str] = []
     scores: dict[str, int] = {}
+    turn: int = 0
 
-    SESSION_REDIS_KEY_FORMAT_STRING = "session_id_{}"
-    SESSION_REDIS_KEY_EXPIRE_TIME = 60 * 60 * 24
+    _SESSION_REDIS_KEY_FORMAT_STRING = "session_id_{}"
+    _SESSION_REDIS_KEY_EXPIRE_TIME = 60 * 60 * 24
 
     @classmethod
     def get_session_by_session_id(cls, session_id: str, r: Redis) -> Self | None:
-        redis_key = cls.SESSION_REDIS_KEY_FORMAT_STRING.format(session_id)
+        redis_key = cls._SESSION_REDIS_KEY_FORMAT_STRING.format(session_id)
         redis_session = r.get(redis_key)
         if not redis_session:
             return None
@@ -26,13 +27,13 @@ class SessionBase(BaseModel):
 
     @property
     def session_key(self):
-        return self.SESSION_REDIS_KEY_FORMAT_STRING.format(self.id)
+        return self._SESSION_REDIS_KEY_FORMAT_STRING.format(self.id)
 
     def set(self, r: Redis):
         return r.set(
             self.session_key,
             self.json(),
-            ex=self.SESSION_REDIS_KEY_EXPIRE_TIME,
+            ex=self._SESSION_REDIS_KEY_EXPIRE_TIME,
         )
 
     def run_basic_verse_validation(self, verse: str) -> str:
@@ -43,6 +44,9 @@ class SessionBase(BaseModel):
     def change_score(self, email: str, score: int) -> int:
         self.scores[email] = self.scores.get(email, 0) + score
         return self.scores[email]
+
+    def get_current_turn(self):
+        return self.users[self.turn % len(self.users)]
 
 
 class NewSession(BaseModel):
@@ -63,6 +67,6 @@ class SubmitIn(SessionIn):
 
 
 class SessionWithPoemOut(BaseModel):
-    verse: VerseBase | None
+    verse: VerseBase | str | None
     session: SessionBase
     error: str | None = None
